@@ -810,8 +810,19 @@ html&gt;body{padding:0}&lt;/style&gt;
     #ejc-app .warning { display:none; margin-bottom:13px; padding:11px 12px; color:var(--ejc-danger); background:#faece9; border-radius:11px; font-size:12px; line-height:1.45; }
     #ejc-app .warning.show { display:block; }
     #ejc-app .note { color:var(--ejc-muted); font-size:11px; line-height:1.5; margin-top:15px; }
+    #ejc-app .library-panel { margin-top:22px; }
+    #ejc-app .library-tools { display:grid; grid-template-columns:minmax(180px,1fr) auto auto auto auto; gap:9px; align-items:end; }
+    #ejc-app .library-tools input { margin-top:0; }
+    #ejc-app .outline { color:var(--ejc-green); background:transparent; border:1px solid var(--ejc-green); padding:9px 11px; border-radius:10px; font-size:12px; font-weight:700; min-height:42px; }
+    #ejc-app .library-list { display:grid; gap:8px; margin-top:16px; }
+    #ejc-app .library-item { display:grid; grid-template-columns:1fr auto auto auto; gap:8px; align-items:center; padding:11px 0; border-top:1px solid var(--ejc-line); }
+    #ejc-app .library-item strong { display:block; font-size:14px; }
+    #ejc-app .library-item small { color:var(--ejc-muted); font-size:11px; }
+    #ejc-app .mini { color:var(--ejc-muted); background:transparent; border:1px solid var(--ejc-line); padding:7px 9px; border-radius:9px; font-size:11px; }
+    #ejc-app .mini.danger { color:var(--ejc-danger); }
+    #ejc-app .empty-library { color:var(--ejc-muted); font-size:13px; padding:8px 0 2px; }
     @media(max-width:840px){ #ejc-app .layout{grid-template-columns:1fr} #ejc-app .result{position:static} }
-    @media(max-width:620px){ #ejc-app .shell{padding:20px 14px} #ejc-app header{align-items:center} #ejc-app .saved{display:none} #ejc-app .grid2{grid-template-columns:1fr} #ejc-app .ingredient,#ejc-app .ingredient.aroma{grid-template-columns:1fr 1fr} #ejc-app .ingredient label:first-child{grid-column:1/-1} #ejc-app .remove{position:absolute; right:28px; margin-top:-49px} #ejc-app .summary{grid-template-columns:1fr 1fr 1fr} }
+    @media(max-width:620px){ #ejc-app .shell{padding:20px 14px} #ejc-app header{align-items:center} #ejc-app .saved{display:none} #ejc-app .grid2{grid-template-columns:1fr} #ejc-app .ingredient,#ejc-app .ingredient.aroma{grid-template-columns:1fr 1fr} #ejc-app .ingredient label:first-child{grid-column:1/-1} #ejc-app .remove{position:absolute; right:28px; margin-top:-49px} #ejc-app .summary{grid-template-columns:1fr 1fr 1fr} #ejc-app .library-tools{grid-template-columns:1fr 1fr} #ejc-app .library-tools input{grid-column:1/-1} #ejc-app .library-item{grid-template-columns:1fr auto auto auto} }
   &lt;/style&gt;
   &lt;div class=&quot;shell&quot;&gt;
     &lt;header&gt;
@@ -851,21 +862,46 @@ html&gt;body{padding:0}&lt;/style&gt;
         &lt;p class=&quot;note&quot;&gt;Vægtfylder er praktiske standardværdier: PG 1,036 · VG 1,261 · ethanol 0,789 g/ml. Resultatet er vejledende.&lt;/p&gt;
       &lt;/aside&gt;
     &lt;/main&gt;
+    &lt;section class=&quot;panel library-panel&quot; aria-label=&quot;Blandingsbibliotek&quot;&gt;
+      &lt;div class=&quot;section-head&quot;&gt;&lt;div&gt;&lt;div class=&quot;eyebrow&quot;&gt;Bibliotek&lt;/div&gt;&lt;h2&gt;Gemte blandinger&lt;/h2&gt;&lt;/div&gt;&lt;/div&gt;
+      &lt;div class=&quot;library-tools&quot;&gt;
+        &lt;label class=&quot;sr-only&quot; for=&quot;recipeName&quot;&gt;Blandingsnavn&lt;/label&gt;&lt;input id=&quot;recipeName&quot; placeholder=&quot;Navn på blanding&quot; maxlength=&quot;80&quot;&gt;
+        &lt;button class=&quot;add&quot; id=&quot;saveNew&quot; type=&quot;button&quot;&gt;Gem som ny&lt;/button&gt;
+        &lt;button class=&quot;outline&quot; id=&quot;updateRecipe&quot; type=&quot;button&quot;&gt;Opdater&lt;/button&gt;
+        &lt;button class=&quot;outline&quot; id=&quot;exportLibrary&quot; type=&quot;button&quot;&gt;Eksportér&lt;/button&gt;
+        &lt;label class=&quot;outline&quot; for=&quot;importFile&quot;&gt;Importér&lt;input id=&quot;importFile&quot; type=&quot;file&quot; accept=&quot;application/json,.json&quot; hidden&gt;&lt;/label&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;library-list&quot; id=&quot;libraryList&quot;&gt;&lt;/div&gt;
+      &lt;p class=&quot;note&quot;&gt;Eksportér giver én JSON-fil til iCloud Drive. Ved import flettes blandinger som udgangspunkt med biblioteket.&lt;/p&gt;
+    &lt;/section&gt;
   &lt;/div&gt;
   &lt;script&gt;
   (() =&gt; {
     const root=document.getElementById(&#x27;ejc-app&#x27;);
     const $=s=&gt;root.querySelector(s); const PG=1.036, VG=1.261, ETH=0.789;
     const defaults={totalMl:100,targetNic:3,pgRatio:50,nics:[{name:&#x27;Nikotinbase&#x27;,strength:20,density:1.036,pg:100,share:100}],aromas:[{name:&#x27;Aroma&#x27;,percent:10,solvent:&#x27;pg&#x27;,density:1.036,pg:100}]};
-    let state;
+    let state, library=[], activeRecipeId=null;
     try{state={...defaults,...JSON.parse(localStorage.getItem(&#x27;ejuice-mixer-v1&#x27;)||&#x27;{}&#x27;)}}catch(e){state=structuredClone(defaults)}
+    try{library=JSON.parse(localStorage.getItem(&#x27;ejuice-mixer-library-v1&#x27;)||&#x27;[]&#x27;)}catch(e){library=[]}
     if(!Array.isArray(state.nics)||!state.nics.length) state.nics=structuredClone(defaults.nics);
     if(!Array.isArray(state.aromas)) state.aromas=[];
+    if(!Array.isArray(library)) library=[];
     const esc=s=&gt;String(s??&#x27;&#x27;).replace(/[&amp;&lt;&gt;&quot;]/g,c=&gt;({&#x27;&amp;&#x27;:&#x27;&amp;amp;&#x27;,&#x27;&lt;&#x27;:&#x27;&amp;lt;&#x27;,&#x27;&gt;&#x27;:&#x27;&amp;gt;&#x27;,&#x27;&quot;&#x27;:&#x27;&amp;quot;&#x27;}[c]));
     const num=(v,d=0)=&gt;Number.isFinite(+v)?+v:d;
     function nicRow(n,i){const pg=Math.min(100,Math.max(0,num(n.pg,100)));return `&lt;div class=&quot;ingredient&quot; data-i=&quot;${i}&quot;&gt;&lt;label&gt;Navn&lt;input data-k=&quot;name&quot; value=&quot;${esc(n.name)}&quot;&gt;&lt;/label&gt;&lt;label&gt;Styrke&lt;input data-k=&quot;strength&quot; type=&quot;number&quot; min=&quot;0&quot; step=&quot;1&quot; value=&quot;${num(n.strength)}&quot;&gt;&lt;/label&gt;&lt;label&gt;Andel %&lt;input data-k=&quot;share&quot; type=&quot;number&quot; min=&quot;0&quot; step=&quot;1&quot; value=&quot;${num(n.share,100)}&quot;&gt;&lt;/label&gt;&lt;label&gt;PG/VG · &lt;span data-pg-read&gt;${pg}/${100-pg}&lt;/span&gt;&lt;input data-k=&quot;pg&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;100&quot; step=&quot;1&quot; value=&quot;${pg}&quot; aria-label=&quot;PG-procent i nikotinbase&quot;&gt;&lt;/label&gt;&lt;button class=&quot;remove&quot; data-remove=&quot;nic&quot; aria-label=&quot;Fjern nikotinbase&quot;&gt;×&lt;/button&gt;&lt;/div&gt;`}
     function aromaRow(a,i){return `&lt;div class=&quot;ingredient aroma&quot; data-i=&quot;${i}&quot;&gt;&lt;label&gt;Navn&lt;input data-k=&quot;name&quot; value=&quot;${esc(a.name)}&quot;&gt;&lt;/label&gt;&lt;label&gt;Vægt %&lt;input data-k=&quot;percent&quot; type=&quot;number&quot; min=&quot;0&quot; step=&quot;0.1&quot; value=&quot;${num(a.percent)}&quot;&gt;&lt;/label&gt;&lt;label&gt;Opløsning&lt;select data-k=&quot;solvent&quot;&gt;&lt;option value=&quot;pg&quot; ${a.solvent===&#x27;pg&#x27;?&#x27;selected&#x27;:&#x27;&#x27;}&gt;PG/VG-baseret&lt;/option&gt;&lt;option value=&quot;ethanol&quot; ${a.solvent===&#x27;ethanol&#x27;?&#x27;selected&#x27;:&#x27;&#x27;}&gt;Ethanol-baseret&lt;/option&gt;&lt;option value=&quot;custom&quot; ${a.solvent===&#x27;custom&#x27;?&#x27;selected&#x27;:&#x27;&#x27;}&gt;Brugerdefineret&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;&lt;label&gt;PG i bærer %&lt;input data-k=&quot;pg&quot; type=&quot;number&quot; min=&quot;0&quot; max=&quot;100&quot; step=&quot;1&quot; value=&quot;${num(a.pg,100)}&quot;&gt;&lt;/label&gt;&lt;label&gt;Vægtfylde&lt;input data-k=&quot;density&quot; type=&quot;number&quot; min=&quot;0.1&quot; step=&quot;0.001&quot; value=&quot;${num(a.density,PG)}&quot;&gt;&lt;/label&gt;&lt;button class=&quot;remove&quot; data-remove=&quot;aroma&quot; aria-label=&quot;Fjern aroma&quot;&gt;×&lt;/button&gt;&lt;/div&gt;`}
     function renderRows(){ $(&#x27;#nicRows&#x27;).innerHTML=state.nics.map(nicRow).join(&#x27;&#x27;); $(&#x27;#aromaRows&#x27;).innerHTML=state.aromas.map(aromaRow).join(&#x27;&#x27;)||&#x27;&lt;p class=&quot;note&quot;&gt;Ingen aromaer tilføjet.&lt;/p&gt;&#x27;; }
+    const copy=value=&gt;JSON.parse(JSON.stringify(value));
+    const makeId=()=&gt;crypto.randomUUID?crypto.randomUUID():&#x27;mix-&#x27;+Date.now()+&#x27;-&#x27;+Math.random().toString(36).slice(2);
+    function persistLibrary(){localStorage.setItem(&#x27;ejuice-mixer-library-v1&#x27;,JSON.stringify(library));}
+    function recipeMeta(r){const s=r.state||{}, date=new Date(r.updatedAt||r.createdAt||Date.now());return `${num(s.totalMl)} ml · ${num(s.targetNic)} mg/ml · ${date.toLocaleDateString(&#x27;da-DK&#x27;)}`}
+    function renderLibrary(){
+      $(&#x27;#libraryList&#x27;).innerHTML=library.length?library.slice().sort((a,b)=&gt;new Date(b.updatedAt)-new Date(a.updatedAt)).map(r=&gt;`&lt;div class=&quot;library-item&quot; data-recipe-id=&quot;${esc(r.id)}&quot;&gt;&lt;div&gt;&lt;strong&gt;${esc(r.name||&#x27;Unavngivet blanding&#x27;)}&lt;/strong&gt;&lt;small&gt;${recipeMeta(r)}&lt;/small&gt;&lt;/div&gt;&lt;button class=&quot;mini&quot; data-library-action=&quot;load&quot;&gt;Indlæs&lt;/button&gt;&lt;button class=&quot;mini&quot; data-library-action=&quot;duplicate&quot;&gt;Duplikér&lt;/button&gt;&lt;button class=&quot;mini danger&quot; data-library-action=&quot;delete&quot;&gt;Slet&lt;/button&gt;&lt;/div&gt;`).join(&#x27;&#x27;):&#x27;&lt;p class=&quot;empty-library&quot;&gt;Ingen gemte blandinger endnu.&lt;/p&gt;&#x27;;
+    }
+    function syncFields(){ $(&#x27;#totalMl&#x27;).value=state.totalMl;$(&#x27;#targetNic&#x27;).value=state.targetNic;$(&#x27;#pgRatio&#x27;).value=state.pgRatio;renderRows();calculate(); }
+    function saveNewRecipe(){const name=$(&#x27;#recipeName&#x27;).value.trim()||&#x27;Unavngivet blanding&#x27;,now=new Date().toISOString();const recipe={version:1,id:makeId(),name,createdAt:now,updatedAt:now,state:copy(state)};library.push(recipe);activeRecipeId=recipe.id;$(&#x27;#recipeName&#x27;).value=name;persistLibrary();renderLibrary();}
+    function updateRecipe(){const found=library.find(r=&gt;r.id===activeRecipeId);if(!found){saveNewRecipe();return}found.name=$(&#x27;#recipeName&#x27;).value.trim()||found.name;found.updatedAt=new Date().toISOString();found.state=copy(state);persistLibrary();renderLibrary();}
+    function loadRecipe(recipe){if(!recipe?.state)return;state={...defaults,...copy(recipe.state)};if(!Array.isArray(state.nics)||!state.nics.length)state.nics=copy(defaults.nics);if(!Array.isArray(state.aromas))state.aromas=[];activeRecipeId=recipe.id;$(&#x27;#recipeName&#x27;).value=recipe.name||&#x27;&#x27;;syncFields();}
     function solve(){
       const V=Math.max(0,num(state.totalMl)), target=Math.max(0,num(state.targetNic)), pgPct=Math.min(100,Math.max(0,num(state.pgRatio,50)))/100;
       const warnings=[], items=[]; let nicVol=0,nicMass=0,nicPG=0,nicVG=0;
@@ -900,13 +936,18 @@ html&gt;body{padding:0}&lt;/style&gt;
       localStorage.setItem(&#x27;ejuice-mixer-v1&#x27;,JSON.stringify(state)); $(&#x27;#savedState&#x27;).textContent=&#x27;Gemt lokalt · nu&#x27;;
     }
     function syncMain(){state.totalMl=num($(&#x27;#totalMl&#x27;).value);state.targetNic=num($(&#x27;#targetNic&#x27;).value);state.pgRatio=num($(&#x27;#pgRatio&#x27;).value);calculate()}
-    $(&#x27;#totalMl&#x27;).value=state.totalMl;$(&#x27;#targetNic&#x27;).value=state.targetNic;$(&#x27;#pgRatio&#x27;).value=state.pgRatio;renderRows();calculate();
+    $(&#x27;#totalMl&#x27;).value=state.totalMl;$(&#x27;#targetNic&#x27;).value=state.targetNic;$(&#x27;#pgRatio&#x27;).value=state.pgRatio;renderRows();calculate();renderLibrary();
     [&#x27;totalMl&#x27;,&#x27;targetNic&#x27;,&#x27;pgRatio&#x27;].forEach(id=&gt;$(&#x27;#&#x27;+id).addEventListener(&#x27;input&#x27;,syncMain));
     root.addEventListener(&#x27;input&#x27;,e=&gt;{const row=e.target.closest(&#x27;.ingredient&#x27;);if(!row)return;const list=row.parentElement.id===&#x27;nicRows&#x27;?state.nics:state.aromas;const obj=list[+row.dataset.i],k=e.target.dataset.k;if(!k)return;obj[k]=(e.target.type===&#x27;number&#x27;||e.target.type===&#x27;range&#x27;)?num(e.target.value):e.target.value;if(k===&#x27;pg&#x27;&amp;&amp;e.target.type===&#x27;range&#x27;){const read=row.querySelector(&#x27;[data-pg-read]&#x27;);if(read)read.textContent=obj[k]+&#x27;/&#x27;+(100-obj[k])}calculate();});
     root.addEventListener(&#x27;change&#x27;,e=&gt;{if(e.target.dataset.k===&#x27;solvent&#x27;){const row=e.target.closest(&#x27;.ingredient&#x27;),a=state.aromas[+row.dataset.i];a.solvent=e.target.value;if(a.solvent!==&#x27;custom&#x27;){a.density=a.solvent===&#x27;ethanol&#x27;?ETH:PG;row.querySelector(&#x27;[data-k=density]&#x27;).value=a.density}calculate();}});
     root.addEventListener(&#x27;click&#x27;,e=&gt;{const rm=e.target.dataset.remove;if(rm){const row=e.target.closest(&#x27;.ingredient&#x27;),list=rm===&#x27;nic&#x27;?state.nics:state.aromas;list.splice(+row.dataset.i,1);renderRows();calculate();}});
     $(&#x27;#addNic&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;{state.nics.push({name:&#x27;Nikotinbase &#x27;+(state.nics.length+1),strength:20,pg:100,share:0});renderRows();calculate();});
     $(&#x27;#addAroma&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;{state.aromas.push({name:&#x27;Aroma &#x27;+(state.aromas.length+1),percent:0,solvent:&#x27;pg&#x27;,density:PG,pg:100});renderRows();calculate();});
+    $(&#x27;#saveNew&#x27;).addEventListener(&#x27;click&#x27;,saveNewRecipe);
+    $(&#x27;#updateRecipe&#x27;).addEventListener(&#x27;click&#x27;,updateRecipe);
+    $(&#x27;#libraryList&#x27;).addEventListener(&#x27;click&#x27;,e=&gt;{const action=e.target.dataset.libraryAction;if(!action)return;const card=e.target.closest(&#x27;[data-recipe-id]&#x27;),id=card?.dataset.recipeId,recipe=library.find(r=&gt;r.id===id);if(!recipe)return;if(action===&#x27;load&#x27;)loadRecipe(recipe);if(action===&#x27;duplicate&#x27;){const now=new Date().toISOString(),clone={...copy(recipe),id:makeId(),name:(recipe.name||&#x27;Unavngivet blanding&#x27;)+&#x27; kopi&#x27;,createdAt:now,updatedAt:now};library.push(clone);persistLibrary();renderLibrary()}if(action===&#x27;delete&#x27;&amp;&amp;confirm(`Slet “${recipe.name}”?`)){library=library.filter(r=&gt;r.id!==id);if(activeRecipeId===id){activeRecipeId=null;$(&#x27;#recipeName&#x27;).value=&#x27;&#x27;}persistLibrary();renderLibrary()}});
+    $(&#x27;#exportLibrary&#x27;).addEventListener(&#x27;click&#x27;,()=&gt;{const data={format:&#x27;ejuice-mixer-library&#x27;,version:1,exportedAt:new Date().toISOString(),recipes:library};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:&#x27;application/json&#x27;})),a=document.createElement(&#x27;a&#x27;);a.href=url;a.download=&#x27;ejuice-bibliotek.json&#x27;;a.click();setTimeout(()=&gt;URL.revokeObjectURL(url),500)});
+    $(&#x27;#importFile&#x27;).addEventListener(&#x27;change&#x27;,e=&gt;{const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=&gt;{try{const data=JSON.parse(reader.result),recipes=Array.isArray(data)?data:data.recipes;if(!Array.isArray(recipes))throw new Error();const imported=recipes.filter(r=&gt;r&amp;&amp;r.state).map(r=&gt;({...r,id:r.id||makeId(),version:1}));const replace=confirm(&#x27;Erstat det nuværende bibliotek? Vælg Annuller for at flette de importerede blandinger ind.&#x27;);if(replace)library=imported;else{const ids=new Set(library.map(r=&gt;r.id));imported.forEach(r=&gt;{if(ids.has(r.id))r.id=makeId();library.push(r)})}persistLibrary();renderLibrary();alert(`${imported.length} blanding(er) importeret.`)}catch(err){alert(&#x27;Filen er ikke et gyldigt eJuice-bibliotek.&#x27;)}e.target.value=&#x27;&#x27;};reader.readAsText(file)});
   })();
   &lt;/script&gt;
 &lt;/div&gt;
