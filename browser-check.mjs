@@ -20,6 +20,7 @@ await page.getByRole('link',{name:'Blandinger',exact:true}).click();
 await page.getByRole('button',{name:'+ Ny blanding'}).click();
 await page.locator('[data-field="recipeName"]').fill('Browser test');
 await page.locator('[data-field="target"]').fill('0');
+await page.locator('#nicotine-mode').selectOption('base');assert.equal(await page.locator('[data-field="target"]').isVisible(),false);
 await page.getByRole('button',{name:'+ Tilføj ingrediens'}).click();
 await page.locator('[data-row="ingredientId"]').selectOption({label:'Aroma test'});
 await page.locator('[data-row="amount"]').fill('10');
