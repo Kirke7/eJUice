@@ -5,7 +5,7 @@ const {chromium}=require(process.env.EJUICE_PLAYWRIGHT||'playwright');
 const browser=await chromium.launch({headless:true,channel:'chrome'});
 const context=await browser.newContext({acceptDownloads:true});
 const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
-await page.goto('http://127.0.0.1:8080');
+await page.goto(process.env.EJUICE_URL||'http://127.0.0.1:8080');
 await page.getByRole('heading',{name:'Blandinger',exact:true}).waitFor();
 await page.getByRole('link',{name:'Ingredienser',exact:true}).click();
 await page.getByRole('button',{name:'+ Ny ingrediens'}).click();
@@ -15,6 +15,7 @@ await page.locator('[data-field="pg"]').fill('50');await page.locator('[data-fie
 await page.getByRole('button',{name:'Brug beregnet standardvægtfylde'}).click();
 await page.getByRole('button',{name:'+ Ny ingrediens'}).click();
 await page.locator('[data-field="name"]').fill('Aroma test');
+await page.locator('[data-field="purchasedFrom"]').fill('VapeShop');await page.locator('[data-field="purchaseUrl"]').fill('https://example.com/aroma');await page.locator('[data-field="purchasePrice"]').fill('79.95');await page.locator('[data-field="purchaseAmount"]').fill('30');assert.equal((await page.locator('.purchase-result').innerText()),'2,67 kr. pr. ml');
 await page.getByRole('link',{name:'Blandinger',exact:true}).click();
 await page.getByRole('button',{name:'+ Ny blanding'}).click();
 await page.locator('[data-field="recipeName"]').fill('Browser test');

@@ -4,11 +4,11 @@ export const now=()=>new Date().toISOString();
 export const defaults={pg:1.036,vg:1.261,ethanol:.789,drops:20};
 export const categories={aroma:'Aroma',additive:'Tilsætning',nicotine:'Nikotinbase',base:'Neutral base',premix:'Forblanding'};
 export function emptyDB(){return {format:'ejuice-lab',version:2,ingredients:[],recipes:[],settings:copy(defaults)};}
-export function ingredient(settings=defaults){return {id:id(),name:'Ny ingrediens',category:'aroma',brand:'',have:true,note:'',pg:100,vg:0,ethanol:0,density:settings.pg,drops:settings.drops,strength:0};}
+export function ingredient(settings=defaults){return {id:id(),name:'Ny ingrediens',category:'aroma',brand:'',have:true,note:'',purchasedFrom:'',purchaseUrl:'',purchasePrice:0,purchaseAmount:0,pg:100,vg:0,ethanol:0,density:settings.pg,drops:settings.drops,strength:0};}
 export function recipe(base){return {id:id(),name:'Ny blanding',updatedAt:now(),draft:{batch:100,target:3,baseId:base?.id||'',rows:[],note:''},undo:[],redo:[],tests:[],versions:[],dirty:true};}
 const finite=n=>typeof n==='number'&&Number.isFinite(n);
 const safeId=n=>typeof n==='string'&&/^[a-zA-Z0-9_-]{1,120}$/.test(n);
-export function checkIngredient(i){if(!i||typeof i.id!=='string'||typeof i.name!=='string'||!categories[i.category])throw Error('Ugyldig ingrediens.');for(const k of ['pg','vg','ethanol','density','drops','strength'])if(!finite(i[k])||i[k]<0)throw Error(`Ugyldig ${k} for ${i.name}.`);if(i.density<=0||i.drops<=0||Math.abs(i.pg+i.vg+i.ethanol-100)>1e-6)throw Error(`Kontrollér vægtfylde og bærerfordeling for ${i.name}.`);}
+export function checkIngredient(i){if(!i||typeof i.id!=='string'||typeof i.name!=='string'||!categories[i.category])throw Error('Ugyldig ingrediens.');for(const k of ['pg','vg','ethanol','density','drops','strength'])if(!finite(i[k])||i[k]<0)throw Error(`Ugyldig ${k} for ${i.name}.`);for(const k of ['purchasePrice','purchaseAmount'])if(i[k]!==undefined&&(!finite(i[k])||i[k]<0))throw Error(`Ugyldig ${k} for ${i.name}.`);if(i.purchasedFrom!==undefined&&typeof i.purchasedFrom!=='string'||i.purchaseUrl!==undefined&&typeof i.purchaseUrl!=='string')throw Error(`Ugyldige købsoplysninger for ${i.name}.`);if(i.density<=0||i.drops<=0||Math.abs(i.pg+i.vg+i.ethanol-100)>1e-6)throw Error(`Kontrollér vægtfylde og bærerfordeling for ${i.name}.`);}
 export function capture(draft,ingredients){const refs=new Set([draft.baseId,...draft.rows.map(r=>r.ingredientId)]);return {draft:copy(draft),ingredients:copy(ingredients.filter(i=>refs.has(i.id)))};}
 export function solve(draft,ingredients,batch=draft.batch){
   if(!finite(batch)||batch<=0)throw Error('Batchstørrelsen skal være større end nul.');

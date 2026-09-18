@@ -2,7 +2,7 @@
 
 Godkendte skærme: Blandinger, Ingredienser, Udvikling, Mere samt Lav batch. Enkel liste, topfaner og direkte redigering. Lokal PWA på GitHub Pages, uden konto eller server. IndexedDB gemmer bibliotek og kladder; JSON-backup flytter data mellem enheder. Installation/offline kræver første åbning via HTTPS.
 
-Ingredienser: navn, type, producent, har/har ikke, fri note, PG/VG/ethanol i volumenprocent (sum 100), vægtfylde i g/ml, dråber/ml, nikotin i mg/ml. Standarddensiteter: 1.036 / 1.261 / 0.789. Kategorier: aroma, tilsætning, nikotinbase, neutral base, forblanding. Ingen lagerantal. Ingredienser i eksisterende kladder, afprøvninger eller versioner kan ikke slettes.
+Ingredienser: navn, type, producent, købt hos, valgfri webshop-URL, købspris og købt mængde i ml, fri note, PG/VG/ethanol i volumenprocent (sum 100), vægtfylde i g/ml, dråber/ml, nikotin i mg/ml. Standarddensiteter: 1.036 / 1.261 / 0.789. Kategorier: aroma, tilsætning, nikotinbase, neutral base, forblanding. Ingen lagerantal. Ingredienser i eksisterende kladder, afprøvninger eller versioner kan ikke slettes.
 
 Opskrifter: 100 ml som standard, valgfri batch samt 10/30/50/100/200 ml. Dosering i vægtprocent eller g/ml færdig væske. Alle doser skalerer. Flere nikotinbaser kan fordele det ønskede nikotinbidrag med relative andele. Én fyld-op-base. Endelig PG/VG/ethanol beregnes fra komponenterne. Resultat: gram, ml og omtrentlige dråber under 1 g. Beregningen antager additive volumener.
 
