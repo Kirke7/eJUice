@@ -24,3 +24,19 @@ export function solve(d,ings,batch=d.batch){
 }
 export function referenced(db,key){return db.recipes.filter(r=>r.draft.fillBaseId===key||r.draft.nicotineBaseId===key||r.draft.rows.some(x=>x.ingredientId===key));}
 export function validate(db){if(!db||db.format!=='ejuice-lab'||db.version!==3||!Array.isArray(db.ingredients)||!Array.isArray(db.recipes))throw Error('Dette er ikke en eJuice Lab v3-database.');db.ingredients.forEach(checkIngredient);return db;}
+
+// Temporary importer for the user's archived v2 JSON. The final database remains v3 only.
+export function promoteV2(data){
+ if(!data||data.format!=='ejuice-lab'||data.version!==2)throw Error('Dette er ikke en eJuice Lab v2-sikkerhedskopi.');
+ const db=emptyDB(); db.settings={...db.settings,...data.settings};
+ const categoryOf=i=>i.category==='aroma'||i.category==='additive'?i.category:(Number(i.strength)>0?'nicotine':'base');
+ db.ingredients=(data.ingredients||[]).map(old=>({...ingredient(db.settings),...copy(old),category:categoryOf(old),purchasePrice:Number(old.purchasePrice||0),purchaseAmount:Number(old.purchaseAmount||0)}));
+ db.recipes=(data.recipes||[]).map(old=>{
+   const r=recipe(),d=copy(old.draft||{}), nicRows=(d.rows||[]).filter(x=>x.mode==='nic');
+   r.id=old.id||id(); r.name=String(old.name||r.name); r.createdAt=old.createdAt||now(); r.updatedAt=old.updatedAt||now();
+   r.draft={batch:Number(d.batch||100),nicotineMode:d.nicotineMode==='base'?'base':'target',target:Number(d.target||0),nicotineBaseId:nicRows.length?nicRows[0].ingredientId:'',fillBaseId:d.baseId||'',rows:(d.rows||[]).filter(x=>x.mode==='weight'||x.mode==='gml').map(x=>({ingredientId:x.ingredientId,mode:x.mode,amount:Number(x.amount||0)})),note:String(d.note||'')};
+   if(nicRows.length>1)r.draft.note=(r.draft.note?r.draft.note+'\n\n':'')+'Importeret fra v2: kontrollér nikotinbase; den gamle opskrift brugte flere nikotinbaser.';
+   r.locked=true; return r;
+ });
+ return db;
+}
