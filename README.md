@@ -1,4 +1,4 @@
-# eJuice Lab
+# eJUice Lab
 
 Lokal blandings- og udviklingsdatabase på dansk. Ingen konto, serverdatabase eller runtime-afhængigheder.
 
