@@ -16,7 +16,7 @@ På iPad/iPhone: åbn siden i Safari → Del → Føj til hjemmeskærm. På Andr
 
 ## Data
 
-IndexedDB og en kortvarig localStorage-nødjournal gemmer ændringer. Gem ekstern JSON-backup under Mere; lokal autosave er ikke synkronisering. Import understøtter gammel v1 og ny v2. Sammenfletning bevarer konflikter som kopier. Browserens datarydning sletter lokal lagring.
+IndexedDB og en kortvarig localStorage-nødjournal gemmer ændringer. Gem ekstern JSON-backup under Mere; lokal autosave er ikke synkronisering. Import accepterer appens aktuelle v3-format. Browserens datarydning sletter lokal lagring.
 
 ## Beregninger og kontrol
 

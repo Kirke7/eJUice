@@ -8,7 +8,7 @@ Opskrifter: 100 ml som standard, valgfri batch samt 10/30/50/100/200 ml. Doserin
 
 Autosave ved hvert input og 20 vedvarende undo/redo-trin pr. kladde. Input grupperes til ét undo-trin pr. redigeret felt. Manuel Gem afprøvning opretter et testpunkt med opskrift, dato, modningsdage, noter og seks valgfrie karakterer 1–5. Gem som ny version opretter permanent version og giver mulighed for oprydning af afprøvninger. Gendan historik opretter en redigerbar kladde og bevarer historikken. Historiske ingrediensdata ændres aldrig af bibliotekets senere rettelser. Lav batch opretter ingen historik.
 
-Backup-format v2 indeholder ingredienser, blandinger, kladder, undo/redo, afprøvninger, versioner og standarder. Import valideres før skrivning. Identiske poster springes over; forskellige poster med samme ID bevares som importkopier og referencer omnummereres. V1-biblioteker konverteres. Fuld erstatning er ikke standard. Nulstilling kræver eksplicit bekræftelse. Appopdateringer sletter ikke brugerdata.
+Backup-format v3 indeholder ingredienser, blandinger og standarder. Import valideres før skrivning og erstatter den lokale database. Nulstilling kræver eksplicit bekræftelse. Appopdateringer sletter ikke brugerdata.
 
 Forblandinger kan fremstilles fra en opskrift og gemmes som ingrediens med beregnet bærer, styrke, densitet og bevaret fremstillingsopskrift.
 
