@@ -9,12 +9,18 @@ const aggregate=items=>{
  return [...map.values()];
 };
 
-export function createDevelopmentSession(source,ingredients,settings,{name,startVolume,tare,startGross}){
- const volume=number(startVolume),empty=number(tare),gross=number(startGross);
- if(!(volume>0))throw Error('Startmængden skal være større end nul.');
- if(!(empty>=0)||!(gross>empty))throw Error('Totalvægten skal være større end beholderens tomvægt.');
- const calculated=solve(source.draft,ingredients,volume,settings),liquidMass=gross-empty,factor=liquidMass/calculated.total;
- return {id:id(),name:String(name||source.name+' – udvikling'),sourceRecipeId:source.id,sourceName:source.name,sourceDraft:copy(source.draft),createdAt:now(),updatedAt:now(),startVolume:volume,tare:empty,startGross:gross,ingredientSnapshots:copy(ingredients),initial:aggregate(calculated.items.map(item=>({id:item.id,grams:item.grams*factor}))),events:[]};
+export function createDevelopmentSession(source,ingredients,settings,{name,startMode,startVolume,tare,startGross}){
+ const empty=number(tare),hasGross=startGross!==''&&startGross!==null&&startGross!==undefined,mode=startMode==='weighed'||(!startMode&&hasGross)?'weighed':'volume';
+ if(!(empty>=0))throw Error('Beholderens tomvægt skal være nul eller større.');
+ let volume,gross,liquidMass,calculated,factor;
+ if(mode==='volume'){
+  volume=number(startVolume);if(!(volume>0))throw Error('Startmængden skal være større end nul.');
+  calculated=solve(source.draft,ingredients,volume,settings);liquidMass=calculated.total;gross=empty+liquidMass;factor=1;
+ }else{
+  gross=number(startGross);if(!(gross>empty))throw Error('Totalvægten skal være større end beholderens tomvægt.');
+  liquidMass=gross-empty;const reference=solve(source.draft,ingredients,100,settings),density=reference.total/100;volume=liquidMass/density;calculated=solve(source.draft,ingredients,volume,settings);factor=liquidMass/calculated.total;
+ }
+ return {id:id(),name:String(name||source.name+' – udvikling'),sourceRecipeId:source.id,sourceName:source.name,sourceDraft:copy(source.draft),createdAt:now(),updatedAt:now(),startMode:mode,startVolume:volume,tare:empty,startGross:gross,ingredientSnapshots:copy(ingredients),initial:aggregate(calculated.items.map(item=>({id:item.id,grams:item.grams*factor}))),events:[]};
 }
 
 function eventAmount(event,ingredient,settings,currentMass,session){
