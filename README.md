@@ -20,8 +20,8 @@ IndexedDB og en kortvarig localStorage-nødjournal gemmer ændringer. Gem ekster
 
 ## Beregninger og kontrol
 
-`npm test` tester vægtprocenter, gram/ml, skalering, nikotin, fyld-op-baser, historiske snapshots, importkonflikter og konvertering. Se SPECIFICATION.md for den låste specifikation. Beregninger antager additive volumener og den angivne vægtfylde. Nikotinstyrke angives som mg nikotin pr. ml, også for nikotinsalt.
+`npm test` tester vægt- og volumenprocenter, gram, dråber, skalering, nikotinmodeller og massebalancen i udviklingssessioner. Se SPECIFICATION.md for den aktuelle specifikation. Beregninger antager additive volumener og den angivne vægtfylde. Nikotinstyrke angives som mg nikotin pr. ml, også for nikotinsalt.
 
-Manuel enhedstest før brug: installér på iOS/Android, genåbn offline, lav en kladde, luk/genåbn, fortryd, eksporter til Filer og importér tilbage. Der er ikke automatisk synkronisering mellem enheder.
+Manuel enhedstest før brug: installér på iOS/Android, genåbn offline, opret en udviklingssession, registrér prøveudtagning og tilsætning, genåbn sessionen og eksportér/importér en sikkerhedskopi. Der er ikke automatisk synkronisering mellem enheder.
 
 `browser-check.mjs` udfører den automatiske browserkontrol med Playwright og installeret Chrome. Start serveren på port 8080 først. Angiv eventuelt `EJUICE_PLAYWRIGHT` til din Playwright-pakke, hvis den ikke er installeret lokalt.
