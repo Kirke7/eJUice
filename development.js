@@ -9,7 +9,7 @@ const aggregate=items=>{
  return [...map.values()];
 };
 
-export function createDevelopmentSession(source,ingredients,settings,{name,startMode,startVolume,tare,startGross}){
+export function createDevelopmentSession(source,ingredients,settings,{name,startMode,startVolume,tare,startGross,capacity}){
  const empty=number(tare),hasGross=startGross!==''&&startGross!==null&&startGross!==undefined,mode=startMode==='weighed'||(!startMode&&hasGross)?'weighed':'volume';
  if(!(empty>=0))throw Error('Beholderens tomvægt skal være nul eller større.');
  let volume,gross,liquidMass,calculated,factor;
@@ -20,7 +20,42 @@ export function createDevelopmentSession(source,ingredients,settings,{name,start
   gross=number(startGross);if(!(gross>empty))throw Error('Totalvægten skal være større end beholderens tomvægt.');
   liquidMass=gross-empty;const reference=solve(source.draft,ingredients,100,settings),density=reference.total/100;volume=liquidMass/density;calculated=solve(source.draft,ingredients,volume,settings);factor=liquidMass/calculated.total;
  }
- return {id:id(),name:String(name||source.name+' – udvikling'),sourceRecipeId:source.id,sourceName:source.name,sourceDraft:copy(source.draft),createdAt:now(),updatedAt:now(),startMode:mode,startVolume:volume,tare:empty,startGross:gross,ingredientSnapshots:copy(ingredients),initial:aggregate(calculated.items.map(item=>({id:item.id,grams:item.grams*factor}))),events:[]};
+ const bottleCapacity=capacity===''||capacity===null||capacity===undefined?volume:number(capacity);
+ if(!(bottleCapacity>0))throw Error('Flaskens kapacitet skal være større end nul.');
+ return {id:id(),name:String(name||source.name+' – udvikling'),sourceRecipeId:source.id,sourceName:source.name,sourceDraft:copy(source.draft),createdAt:now(),updatedAt:now(),startMode:mode,startVolume:volume,bottleCapacity,tare:empty,startGross:gross,ingredientSnapshots:copy(ingredients),initial:aggregate(calculated.items.map(item=>({id:item.id,grams:item.grams*factor}))),events:[]};
+}
+
+// A current aroma can only be diluted, never removed. The optional second target
+// is reached by adding that aroma; the recipe's existing fill base takes the rest.
+export function planDevelopmentTargets(session,settings,{primaryId,primaryPercent,secondaryId='',secondaryPercent=0}){
+ const state=developmentState(session,settings),ingredients=session.ingredientSnapshots;
+ const primary=byId(ingredients,primaryId),base=byId(ingredients,session.sourceDraft.fillBaseId);
+ if(!primary||!['aroma','additive'].includes(primary.category))throw Error('Vælg en aroma eller et tilsætningsstof, som allerede findes i prøven.');
+ if(!base||!['base','nicotine'].includes(base.category))throw Error('Startopskriftens base kan ikke findes.');
+ const currentPrimary=state.items.find(item=>item.id===primaryId)?.ml||0;
+ if(!(currentPrimary>0))throw Error('Den valgte ingrediens findes ikke i den aktuelle prøve.');
+ const target=number(primaryPercent);
+ if(!Number.isFinite(target)||target<=0||target>=100)throw Error('Målet skal være mellem 0 og 100 volumenprocent.');
+ const currentPercent=currentPrimary/state.volume*100;
+ if(target>=currentPercent-1e-9)throw Error('Fortyndingsmålet skal være lavere end den aktuelle koncentration.');
+ const finalVolume=currentPrimary/(target/100),additions=[];
+ if(!Number.isFinite(finalVolume))throw Error('Målet giver en urealistisk slutmængde.');
+ let secondMl=0;
+ if(secondaryId){
+  const second=byId(ingredients,secondaryId),secondTarget=number(secondaryPercent);
+  if(!second||!['aroma','additive'].includes(second.category)||second.id===primaryId)throw Error('Vælg en anden aroma eller et andet tilsætningsstof.');
+  if(!Number.isFinite(secondTarget)||secondTarget<=0||secondTarget>=100)throw Error('Det andet mål skal være mellem 0 og 100 volumenprocent.');
+  const existing=state.items.find(item=>item.id===second.id)?.ml||0;
+  secondMl=finalVolume*secondTarget/100-existing;
+  if(secondMl< -1e-8)throw Error('Den anden ingrediens ligger allerede over det ønskede mål og kan ikke fjernes.');
+  if(secondMl>1e-8)additions.push({ingredientId:second.id,name:second.name,ml:secondMl,grams:secondMl*second.density,drops:secondMl*dropsPerMl(second,settings)});
+ }
+ const baseMl=finalVolume-state.volume-secondMl;
+ if(baseMl< -1e-8)throw Error('Målene kan ikke nås ved at tilsætte ingredienser og base i denne prøve.');
+ if(baseMl>1e-8)additions.push({ingredientId:base.id,name:base.name,ml:baseMl,grams:baseMl*base.density,drops:baseMl*dropsPerMl(base,settings)});
+ const capacity=number(session.bottleCapacity??session.startVolume);
+ const nicotine=state.items.reduce((sum,item)=>sum+item.ml*item.strength,0)+additions.reduce((sum,item)=>sum+item.ml*(byId(ingredients,item.ingredientId)?.strength||0),0);
+ return {currentVolume:state.volume,finalVolume,capacity,overCapacity:finalVolume>capacity+1e-8,excessMl:Math.max(0,finalVolume-capacity),strength:nicotine/finalVolume,primaryPercent:target,secondaryPercent:secondaryId?number(secondaryPercent):null,additions};
 }
 
 function eventAmount(event,ingredient,settings,currentMass,session){
