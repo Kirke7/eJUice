@@ -73,6 +73,46 @@ export function planDevelopmentTargets(session,settings,{targets=[]}){
  return {currentVolume:state.volume,finalVolume,capacity,overCapacity:finalVolume>capacity+1e-8,excessMl:Math.max(0,finalVolume-capacity),strength:nicotine/finalVolume,additions,composition:[...composition].map(([ingredientId,ml])=>({ingredientId,name:byId(ingredients,ingredientId).name,percent:ml/finalVolume*100}))};
 }
 
+export function correctDevelopmentPlan(session,settings,plan,adjustments){
+ const state=developmentState(session,settings),ingredients=session.ingredientSnapshots,base=byId(ingredients,session.sourceDraft.fillBaseId);
+ if(!base||Math.abs(state.volume-plan.currentVolume)>1e-7)throw Error('Prøven er ændret. Beregn målet igen.');
+ const editable=plan.additions.filter(item=>item.ingredientId!==base.id),values=new Map();
+ for(const row of adjustments){
+  const ml=number(row.ml);
+  if(values.has(row.ingredientId)||!editable.some(item=>item.ingredientId===row.ingredientId))throw Error('Kontrollér de korrigerede ingredienser.');
+  if(!Number.isFinite(ml)||ml<0)throw Error('Korrigerede mængder skal være nul eller større.');
+  values.set(row.ingredientId,ml);
+ }
+ if(values.size!==editable.length)throw Error('Angiv en korrigeret mængde for hver ingrediens.');
+ const nonBaseMl=[...values.values()].reduce((sum,ml)=>sum+ml,0),baseMl=plan.finalVolume-state.volume-nonBaseMl;
+ if(baseMl< -1e-8)throw Error('De korrigerede mængder fylder mere end den planlagte slutmængde. Gå tilbage og justér målet.');
+ const additions=[];
+ for(const [ingredientId,ml] of [...values,[base.id,Math.max(0,baseMl)]]){
+  if(ml<=1e-8)continue;
+  const ingredient=byId(ingredients,ingredientId);
+  additions.push({ingredientId,name:ingredient.name,ml,grams:ml*ingredient.density,drops:ml*dropsPerMl(ingredient,settings)});
+ }
+ const capacity=number(session.bottleCapacity??session.startVolume),composition=new Map(state.items.map(item=>[item.id,item.ml]));
+ for(const item of additions)composition.set(item.ingredientId,(composition.get(item.ingredientId)||0)+item.ml);
+ const nicotine=state.items.reduce((sum,item)=>sum+item.ml*item.strength,0)+additions.reduce((sum,item)=>sum+item.ml*byId(ingredients,item.ingredientId).strength,0);
+ return {currentVolume:state.volume,finalVolume:plan.finalVolume,capacity,overCapacity:plan.finalVolume>capacity+1e-8,excessMl:Math.max(0,plan.finalVolume-capacity),strength:nicotine/plan.finalVolume,additions,composition:[...composition].map(([ingredientId,ml])=>({ingredientId,name:byId(ingredients,ingredientId).name,percent:ml/plan.finalVolume*100}))};
+}
+
+export function registerDevelopmentPlan(session,settings,corrected){
+ const state=developmentState(session,settings),capacity=number(session.bottleCapacity??session.startVolume);
+ if(Math.abs(state.volume-corrected.currentVolume)>1e-7)throw Error('Prøven er ændret. Beregn målet igen.');
+ if(corrected.finalVolume>capacity+1e-8)throw Error('Slutmængden overstiger flaskens kapacitet.');
+ if(!corrected.additions.length)throw Error('Der er ingen tilsætninger at registrere.');
+ const trial=copy(session);
+ for(const item of corrected.additions){
+  if(!(Number.isFinite(item.ml)&&item.ml>0))throw Error('Ugyldig tilsætningsmængde.');
+  appendDevelopmentEvent(trial,{type:'addition',ingredientId:item.ingredientId,method:'amount',unit:'ml',amount:item.ml,note:'Overført fra målberegner'},settings);
+ }
+ if(Math.abs(developmentState(trial,settings).volume-corrected.finalVolume)>1e-7)throw Error('Registreringerne stemmer ikke med den forventede slutmængde.');
+ session.events=trial.events;session.updatedAt=trial.updatedAt;
+ return session.events.length;
+}
+
 function eventAmount(event,ingredient,settings,currentMass,session){
  if(event.type==='withdrawal'){
   const desired=number(event.gross)-session.tare;
