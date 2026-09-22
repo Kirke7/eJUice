@@ -23,13 +23,17 @@ export function solve(d,ings,batch=d.batch,settings=defaults){
  const fillMl=batch-items.reduce((s,x)=>s+x.ml,0);if(fillMl<-.0001)throw Error('Ingredienserne fylder mere end batchstørrelsen.');items.push({...fill,name:fill.name+(d.nicotineMode==='target'?' · fortyndingsbase':' · nikotinbase'),ml:Math.max(0,fillMl),grams:Math.max(0,fillMl)*fill.density,dropRate:dropsPerMl(fill,settings)});
  const total=items.reduce((s,x)=>s+x.grams,0),strength=items.reduce((s,x)=>s+x.ml*x.strength,0)/batch;return {items,total,batch,strength,pg:items.reduce((s,x)=>s+x.ml*x.pg,0)/batch,vg:items.reduce((s,x)=>s+x.ml*x.vg,0)/batch,ethanol:items.reduce((s,x)=>s+x.ml*x.ethanol,0)/batch};
 }
-export function convertDosePercentMode(draft,ingredients,settings,rowIndex,nextMode){
- const row=draft.rows[rowIndex],modes=['weight','volume'];
- if(!row||!modes.includes(row.mode)||!modes.includes(nextMode))throw Error('Kun vægt- og volumenprocent kan omregnes direkte.');
+export function convertDoseMode(draft,ingredients,settings,rowIndex,nextMode){
+ const row=draft.rows[rowIndex],modes=['weight','volume','grams','drops'];
+ if(!row||!modes.includes(row.mode)||!modes.includes(nextMode))throw Error('Vælg en gyldig enhed.');
  if(row.mode===nextMode)return row.amount;
  const calculated=solve(draft,ingredients,draft.batch,settings),item=calculated.items[rowIndex];
  if(!item)throw Error('Ingrediensen kan ikke omregnes.');
- const amount=nextMode==='weight'?item.grams/calculated.total*100:item.ml/calculated.batch*100;
+ let amount;
+ if(nextMode==='weight')amount=item.grams/calculated.total*100;
+ else if(nextMode==='volume')amount=item.ml/calculated.batch*100;
+ else if(nextMode==='grams')amount=item.grams;
+ else amount=Math.round(item.ml*dropsPerMl(item,settings));
  if(!Number.isFinite(amount)||amount<0)throw Error('Ingrediensen kan ikke omregnes.');
  row.mode=nextMode;row.amount=amount;return amount;
 }
