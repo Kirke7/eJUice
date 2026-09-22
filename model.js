@@ -7,7 +7,6 @@ export const emptyDB=()=>({format:'ejuice-lab',version:3,ingredients:[],recipes:
 export function ingredient(settings=defaults){return {id:id(),name:'Ny ingrediens',category:'aroma',brand:'',have:true,note:'',purchasedFrom:'',purchaseUrl:'',purchasePrice:0,purchaseAmount:0,pg:100,vg:0,ethanol:0,density:settings.pg,drops:settings.drops,dropsOverride:null,strength:0,locked:false};}
 export function recipe(){return {id:id(),name:'Ny blanding',createdAt:now(),updatedAt:now(),rating:0,locked:false,draft:{batch:100,nicotineMode:'target',target:3,nicotineBaseId:'',fillBaseId:'',rows:[],note:''},undo:[],redo:[]};}
 export const recipeRating=r=>Number.isInteger(r.rating)&&r.rating>=0&&r.rating<=10?r.rating:0;
-export function dateOnFirstOpen(r,date=now()){if(!r.createdAt||Number.isNaN(Date.parse(r.createdAt)))r.createdAt=date;return r.createdAt;}
 export function sortedRecipes(recipes,sortBy='date'){
  const sorted=[...recipes],byName=(a,b)=>a.name.localeCompare(b.name,'da',{sensitivity:'base'});
  if(sortBy==='name')return sorted.sort(byName);
