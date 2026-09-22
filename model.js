@@ -3,9 +3,17 @@ export const id=()=>crypto.randomUUID();
 export const now=()=>new Date().toISOString();
 export const defaults={pg:1.036,vg:1.261,ethanol:.789,drops:68,dropsPgVg:68,dropsEthanol:125,scaleResolution:.1};
 export const categories={aroma:'Aroma',additive:'Tilsætning',nicotine:'Nikotinbase',base:'Base'};
-export const emptyDB=()=>({format:'ejuice-lab',version:3,ingredients:[],recipes:[],developmentSessions:[],settings:copy(defaults)});
+export const emptyDB=()=>({format:'ejuice-lab',version:3,ingredients:[],recipes:[],developmentSessions:[],sortBy:'date',settings:copy(defaults)});
 export function ingredient(settings=defaults){return {id:id(),name:'Ny ingrediens',category:'aroma',brand:'',have:true,note:'',purchasedFrom:'',purchaseUrl:'',purchasePrice:0,purchaseAmount:0,pg:100,vg:0,ethanol:0,density:settings.pg,drops:settings.drops,dropsOverride:null,strength:0,locked:false};}
-export function recipe(){return {id:id(),name:'Ny blanding',createdAt:now(),updatedAt:now(),locked:false,draft:{batch:100,nicotineMode:'target',target:3,nicotineBaseId:'',fillBaseId:'',rows:[],note:''},undo:[],redo:[]};}
+export function recipe(){return {id:id(),name:'Ny blanding',createdAt:now(),updatedAt:now(),rating:0,locked:false,draft:{batch:100,nicotineMode:'target',target:3,nicotineBaseId:'',fillBaseId:'',rows:[],note:''},undo:[],redo:[]};}
+export const recipeRating=r=>Number.isInteger(r.rating)&&r.rating>=0&&r.rating<=10?r.rating:0;
+export function dateOnFirstOpen(r,date=now()){if(!r.createdAt||Number.isNaN(Date.parse(r.createdAt)))r.createdAt=date;return r.createdAt;}
+export function sortedRecipes(recipes,sortBy='date'){
+ const sorted=[...recipes],byName=(a,b)=>a.name.localeCompare(b.name,'da',{sensitivity:'base'});
+ if(sortBy==='name')return sorted.sort(byName);
+ if(sortBy==='rating')return sorted.sort((a,b)=>recipeRating(b)-recipeRating(a)||byName(a,b));
+ return sorted.sort((a,b)=>{const ad=Date.parse(a.createdAt),bd=Date.parse(b.createdAt);return (Number.isNaN(ad)?1:0)-(Number.isNaN(bd)?1:0)||(Number.isNaN(ad)?0:bd)-(Number.isNaN(bd)?0:ad)||byName(a,b)});
+}
 const finite=n=>typeof n==='number'&&Number.isFinite(n);
 const get=(ings,key)=>{const x=ings.find(i=>i.id===key);if(!x)throw Error('Vælg en gyldig ingrediens.');return x;};
 export function checkIngredient(i){if(!i||typeof i.id!=='string'||typeof i.name!=='string'||!categories[i.category])throw Error('Ugyldig ingrediens.');for(const k of ['pg','vg','ethanol','density','drops','strength'])if(!finite(i[k])||i[k]<0)throw Error(`Ugyldig ${k}.`);if(i.dropsOverride!==undefined&&i.dropsOverride!==null&&(!finite(i.dropsOverride)||i.dropsOverride<0))throw Error('Ugyldig individuel dråbeværdi.');if(i.density<=0||Math.abs(i.pg+i.vg+i.ethanol-100)>.001)throw Error('Bærerfordelingen skal være 100 % og vægtfylden større end nul.');}
@@ -39,4 +47,4 @@ export function convertDoseMode(draft,ingredients,settings,rowIndex,nextMode){
 }
 export function referenced(db,key){return db.recipes.filter(r=>r.draft.fillBaseId===key||r.draft.nicotineBaseId===key||r.draft.rows.some(x=>x.ingredientId===key));}
 export function validate(db){if(!db||db.format!=='ejuice-lab'||db.version!==3||!Array.isArray(db.ingredients)||!Array.isArray(db.recipes))throw Error('Dette er ikke en eJuice Lab v3-database.');db.ingredients.forEach(checkIngredient);return db;}
-export function normalize(db){db.settings={...defaults,...(db.settings||{})};db.developmentSessions=Array.isArray(db.developmentSessions)?db.developmentSessions:[];for(const i of db.ingredients||[]){if(i.dropsOverride===undefined)i.dropsOverride=null;if(i.locked===undefined)i.locked=true;}for(const r of db.recipes||[])for(const row of r.draft?.rows||[])if(row.mode==='gml'){row.amount=Number(row.amount||0)*Number(r.draft.batch||100);row.mode='grams';}return db;}
+export function normalize(db){db.settings={...defaults,...(db.settings||{})};db.developmentSessions=Array.isArray(db.developmentSessions)?db.developmentSessions:[];if(!['date','name','rating'].includes(db.sortBy))db.sortBy='date';for(const i of db.ingredients||[]){if(i.dropsOverride===undefined)i.dropsOverride=null;if(i.locked===undefined)i.locked=true;}for(const r of db.recipes||[])for(const row of r.draft?.rows||[])if(row.mode==='gml'){row.amount=Number(row.amount||0)*Number(r.draft.batch||100);row.mode='grams';}return db;}
