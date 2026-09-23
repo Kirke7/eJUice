@@ -27,8 +27,11 @@ export function createDevelopmentSession(source,ingredients,settings,{name,start
 
 // Targets are final volume or weight percentages. Untargeted ingredients keep
 // their absolute amount; the recipe's fill base supplies the remainder.
-export function planDevelopmentTargets(session,settings,{targets=[],percentMode=settings.percentMode||'volume'}){
+export function planDevelopmentTargets(session,settings,{targets=[],percentMode=settings.percentMode||'volume',desiredVolume=null}){
  if(!['volume','weight'].includes(percentMode))throw Error('Vælg vol% eller vægt%.');
+ const hasDesiredVolume=desiredVolume!==null&&desiredVolume!==undefined&&desiredVolume!=='';
+ const requestedVolume=hasDesiredVolume?number(desiredVolume):null;
+ if(hasDesiredVolume&&(!Number.isFinite(requestedVolume)||requestedVolume<=0))throw Error('Ønsket slutvolumen skal være større end nul.');
  const state=developmentState(session,settings),ingredients=session.ingredientSnapshots,unit=percentMode==='weight'?'grams':'ml',initialTotal=percentMode==='weight'?state.mass:state.volume;
  const base=byId(ingredients,session.sourceDraft.fillBaseId),requested=new Map(),current=new Map(state.items.map(item=>[item.id,item[unit]]));
  if(!base||!['base','nicotine'].includes(base.category))throw Error('Startopskriftens base kan ikke findes.');
@@ -40,7 +43,7 @@ export function planDevelopmentTargets(session,settings,{targets=[],percentMode=
   if(percent===0&&(current.get(ingredient.id)||0)>1e-8)throw Error(`${ingredient.name} findes allerede i prøven og kan ikke fjernes.`);
   requested.set(ingredient.id,percent/100);
  }
- if(!requested.size)throw Error('Angiv mindst ét mål.');
+ if(!requested.size&&!hasDesiredVolume)throw Error('Angiv mindst ét mål eller et ønsket slutvolumen.');
  const baseTarget=requested.get(base.id),otherTargets=[...requested].filter(([key])=>key!==base.id);
  const otherPercent=otherTargets.reduce((sum,[,percent])=>sum+percent,0);
  const totalPercent=otherPercent+(baseTarget||0);
@@ -62,17 +65,25 @@ export function planDevelopmentTargets(session,settings,{targets=[],percentMode=
   if(finalTotal<minimum-1e-7)throw Error('Målet kræver, at en eksisterende ingrediens fjernes. Justér målene eller brug en ny prøve.');
  }
  if(!Number.isFinite(finalTotal)||finalTotal<=0)throw Error('Målene giver en urealistisk slutmængde.');
- const additions=[];
+ let additions=[];
  const add=(ingredient,amount)=>{if(amount>1e-8){const ml=percentMode==='weight'?amount/ingredient.density:amount,grams=percentMode==='weight'?amount:amount*ingredient.density;additions.push({ingredientId:ingredient.id,name:ingredient.name,ml,grams,drops:ml*dropsPerMl(ingredient,settings)})}};
  for(const [key,percent] of otherTargets)add(byId(ingredients,key),percent*finalTotal-(current.get(key)||0));
  const baseAmount=baseTarget===undefined?finalTotal-initialTotal-additions.reduce((sum,item)=>sum+item[unit],0):baseTarget*finalTotal-(current.get(base.id)||0);
  add(base,baseAmount);
- const finalVolume=state.volume+additions.reduce((sum,item)=>sum+item.ml,0),finalMass=state.mass+additions.reduce((sum,item)=>sum+item.grams,0);
+ let finalVolume=state.volume+additions.reduce((sum,item)=>sum+item.ml,0),finalMass=state.mass+additions.reduce((sum,item)=>sum+item.grams,0);
+ const calculatedVolume=finalVolume;
  const capacity=number(session.bottleCapacity??session.startVolume);
- const nicotine=state.items.reduce((sum,item)=>sum+item.ml*item.strength,0)+additions.reduce((sum,item)=>sum+item.ml*(byId(ingredients,item.ingredientId)?.strength||0),0);
+ let nicotine=state.items.reduce((sum,item)=>sum+item.ml*item.strength,0)+additions.reduce((sum,item)=>sum+item.ml*(byId(ingredients,item.ingredientId)?.strength||0),0);
  const composition=new Map(state.items.map(item=>[item.id,{ml:item.ml,grams:item.grams}]));
  for(const item of additions){const previous=composition.get(item.ingredientId)||{ml:0,grams:0};composition.set(item.ingredientId,{ml:previous.ml+item.ml,grams:previous.grams+item.grams})}
- return {percentMode,currentVolume:state.volume,finalVolume,finalMass,capacity,overCapacity:finalVolume>capacity+1e-8,excessMl:Math.max(0,finalVolume-capacity),strength:nicotine/finalVolume,additions,composition:[...composition].map(([ingredientId,amount])=>({ingredientId,name:byId(ingredients,ingredientId).name,ml:amount.ml,grams:amount.grams,volumePercent:amount.ml/finalVolume*100,weightPercent:amount.grams/finalMass*100,percent:percentMode==='weight'?amount.grams/finalMass*100:amount.ml/finalVolume*100}))};
+ if(hasDesiredVolume){
+  if(requestedVolume<=calculatedVolume+1e-8)throw Error(`Ønsket slutvolumen skal være større end de beregnede ${calculatedVolume.toFixed(2)} ml.`);
+  const factor=requestedVolume/calculatedVolume,starting=new Map(state.items.map(item=>[item.id,item.ml]));
+  additions=[...composition].map(([ingredientId,amount])=>{const ingredient=byId(ingredients,ingredientId),ml=amount.ml*factor-(starting.get(ingredientId)||0);return {ingredientId,name:ingredient.name,ml,grams:ml*ingredient.density,drops:ml*dropsPerMl(ingredient,settings)}}).filter(item=>item.ml>1e-8);
+  for(const amount of composition.values()){amount.ml*=factor;amount.grams*=factor}
+  finalVolume=requestedVolume;finalMass*=factor;nicotine*=factor;
+ }
+ return {percentMode,currentVolume:state.volume,calculatedVolume,finalVolume,finalMass,capacity,overCapacity:finalVolume>capacity+1e-8,excessMl:Math.max(0,finalVolume-capacity),strength:nicotine/finalVolume,additions,composition:[...composition].map(([ingredientId,amount])=>({ingredientId,name:byId(ingredients,ingredientId).name,ml:amount.ml,grams:amount.grams,volumePercent:amount.ml/finalVolume*100,weightPercent:amount.grams/finalMass*100,percent:percentMode==='weight'?amount.grams/finalMass*100:amount.ml/finalVolume*100}))};
 }
 
 export function correctDevelopmentPlan(session,settings,plan,adjustments){
