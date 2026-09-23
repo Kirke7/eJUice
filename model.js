@@ -1,7 +1,7 @@
 export const copy=x=>structuredClone(x);
 export const id=()=>crypto.randomUUID();
 export const now=()=>new Date().toISOString();
-export const defaults={pg:1.036,vg:1.261,ethanol:.789,drops:68,dropsPgVg:68,dropsEthanol:125,scaleResolution:.1};
+export const defaults={pg:1.036,vg:1.261,ethanol:.789,drops:68,dropsPgVg:68,dropsEthanol:125,scaleResolution:.1,percentMode:'volume'};
 export const categories={aroma:'Aroma',additive:'Tilsætning',nicotine:'Nikotinbase',base:'Base'};
 export const emptyDB=()=>({format:'ejuice-lab',version:3,ingredients:[],recipes:[],developmentSessions:[],sortBy:'date',settings:copy(defaults)});
 export function ingredient(settings=defaults){return {id:id(),name:'Ny ingrediens',category:'aroma',brand:'',have:true,note:'',purchasedFrom:'',purchaseUrl:'',purchasePrice:0,purchaseAmount:0,pg:100,vg:0,ethanol:0,density:settings.pg,drops:settings.drops,dropsOverride:null,strength:0,locked:false};}
@@ -46,4 +46,4 @@ export function convertDoseMode(draft,ingredients,settings,rowIndex,nextMode){
 }
 export function referenced(db,key){return db.recipes.filter(r=>r.draft.fillBaseId===key||r.draft.nicotineBaseId===key||r.draft.rows.some(x=>x.ingredientId===key));}
 export function validate(db){if(!db||db.format!=='ejuice-lab'||db.version!==3||!Array.isArray(db.ingredients)||!Array.isArray(db.recipes))throw Error('Dette er ikke en eJuice Lab v3-database.');db.ingredients.forEach(checkIngredient);return db;}
-export function normalize(db){db.settings={...defaults,...(db.settings||{})};db.developmentSessions=Array.isArray(db.developmentSessions)?db.developmentSessions:[];if(!['date','name','rating'].includes(db.sortBy))db.sortBy='date';for(const i of db.ingredients||[]){if(i.dropsOverride===undefined)i.dropsOverride=null;if(i.locked===undefined)i.locked=true;}for(const r of db.recipes||[])for(const row of r.draft?.rows||[])if(row.mode==='gml'){row.amount=Number(row.amount||0)*Number(r.draft.batch||100);row.mode='grams';}return db;}
+export function normalize(db){db.settings={...defaults,...(db.settings||{})};if(!['volume','weight'].includes(db.settings.percentMode))db.settings.percentMode='volume';db.developmentSessions=Array.isArray(db.developmentSessions)?db.developmentSessions:[];if(!['date','name','rating'].includes(db.sortBy))db.sortBy='date';for(const i of db.ingredients||[]){if(i.dropsOverride===undefined)i.dropsOverride=null;if(i.locked===undefined)i.locked=true;}for(const r of db.recipes||[])for(const row of r.draft?.rows||[])if(row.mode==='gml'){row.amount=Number(row.amount||0)*Number(r.draft.batch||100);row.mode='grams';}return db;}
