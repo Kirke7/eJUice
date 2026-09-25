@@ -1,4 +1,4 @@
-import {copy,id,now,recipe,solve,dropsPerMl} from './model.js';
+import {copy,id,now,recipe,solve,dropsPerMl,checkIngredient,checkRecipe} from './model.js';
 
 const number=value=>Number(String(value).replace(',','.'));
 const total=items=>items.reduce((sum,item)=>sum+item.grams,0);
@@ -177,13 +177,37 @@ export function replaceDevelopmentEvent(session,eventId,replacement,settings){
  session.updatedAt=now();return session.events[index];
 }
 
-export function developmentToRecipe(session,settings,name){
+export function developmentToRecipe(session,settings,name,ingredients){
+ if(!Array.isArray(ingredients))throw Error('Ingrediensbiblioteket skal angives, før resultatet kan oprettes.');
  const state=developmentState(session,settings),result=recipe(),draft=copy(session.sourceDraft),mass=state.mass;
- const rows=state.items.filter(item=>item.category==='aroma'||item.category==='additive').map(item=>({ingredientId:item.id,mode:'weight',amount:item.grams/mass*100}));
- draft.batch=100;draft.rows=rows;if(draft.nicotineMode==='target')draft.target=state.strength;
+ if(!(state.volume>0&&mass>0))throw Error('Prøven indeholder ikke nok væske til en opskrift.');
+ const fillId=draft.fillBaseId,nicId=draft.nicotineBaseId;
+ for(const item of state.items){
+  const live=byId(ingredients,item.id);
+  if(!live)throw Error(`${item.name} findes ikke længere i ingrediensbiblioteket. Genskab ingrediensen før oprettelse.`);
+  checkIngredient(live);
+  if(['category','density','strength','pg','vg','ethanol'].some(key=>live[key]!==item[key]))throw Error(`${item.name} er ændret i ingrediensbiblioteket siden sessionens start. En opskrift ville afvige fra prøven.`);
+  if(['base','nicotine'].includes(item.category)&&item.id!==fillId&&!(draft.nicotineMode==='target'&&item.id===nicId&&item.category==='nicotine'))throw Error('Prøven indeholder en ekstra base eller nikotinbase, som opskriftsmodellen ikke kan gengive.');
+ }
+ if(draft.nicotineMode==='target'){
+  draft.target=state.strength;
+  if(state.strength===0)draft.nicotineBaseId='';
+ }else draft.nicotineBaseId='';
+ draft.batch=100;
+ draft.rows=state.items.filter(item=>item.category==='aroma'||item.category==='additive').map(item=>({ingredientId:item.id,mode:'weight',amount:item.grams/mass*100}));
  const log=session.events.map((event,index)=>`${index+1}. ${event.type==='withdrawal'?'Prøve udtaget':(byId(session.ingredientSnapshots,event.ingredientId)?.name||'Ingrediens')+' tilsat'}${event.note?' – '+event.note:''}`).join('\n');
  draft.note=[draft.note,`Udviklet fra “${session.sourceName}”.`,log].filter(Boolean).join('\n\n');
- Object.assign(result,{name:String(name||session.name),locked:true,draft,updatedAt:now()});return result;
+ Object.assign(result,{name:String(name||session.name),locked:true,draft,updatedAt:now()});
+ checkRecipe(result,ingredients,settings);
+ const mixed=solve(draft,ingredients,100,settings),scale=100/state.volume,actual=new Map();
+ for(const item of mixed.items){const amount=actual.get(item.id)||{ml:0,grams:0};amount.ml+=item.ml;amount.grams+=item.grams;actual.set(item.id,amount)}
+ for(const item of state.items){
+  const amount=actual.get(item.id);
+  if(!amount||Math.abs(amount.ml-item.ml*scale)>1e-7||Math.abs(amount.grams-item.grams*scale)>1e-7)throw Error('Resultatet kan ikke gengives som en almindelig opskrift uden at ændre sammensætningen.');
+  actual.delete(item.id);
+ }
+ if([...actual.values()].some(amount=>amount.ml>1e-7||amount.grams>1e-7))throw Error('Resultatet kan ikke gengives som en almindelig opskrift uden at ændre sammensætningen.');
+ return result;
 }
 
 export function sessionUsesIngredient(session,ingredientId){return session.initial.some(item=>item.ingredientId===ingredientId)||session.events.some(event=>event.ingredientId===ingredientId)}

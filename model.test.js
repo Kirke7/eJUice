@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {emptyDB,ingredient,recipe,solve,convertDoseMode,referenced,dropsPerMl,normalize,recipeRating,sortedRecipes} from './model.js';
+import test from 'node:test';import assert from 'node:assert/strict';import {emptyDB,ingredient,recipe,solve,convertDoseMode,referenced,dropsPerMl,normalize,validate,checkIngredient,checkRecipe,recipeRating,sortedRecipes} from './model.js';
 import {createDevelopmentSession,developmentState,appendDevelopmentEvent,replaceDevelopmentEvent,developmentToRecipe,planDevelopmentTargets,correctDevelopmentPlan,registerDevelopmentPlan} from './development.js';
 function base(db,name,category,strength=0){const x=ingredient(db.settings);Object.assign(x,{name,category,strength,pg:50,vg:50,density:1.1485});db.ingredients.push(x);return x}
 test('gammel blanding uden dato får ikke automatisk en dato',()=>{const db=emptyDB(),r=recipe();delete r.createdAt;db.recipes.push(r);normalize(db);sortedRecipes(db.recipes,db.sortBy);assert.equal(r.createdAt,undefined)});
@@ -17,7 +17,7 @@ test('udviklingssession kan starte alene fra en kendt volumen',()=>{const db=emp
 test('udviklingssession kan starte alene fra en målt totalvægt',()=>{const db=emptyDB(),fill=base(db,'Base','base'),r=recipe();r.draft.nicotineMode='base';r.draft.fillBaseId=fill.id;const session=createDevelopmentSession(r,db.ingredients,db.settings,{name:'Vægt',startMode:'weighed',startVolume:'',tare:4,startGross:15}),state=developmentState(session,db.settings);assert.equal(session.startMode,'weighed');assert.equal(session.startGross,15);assert.ok(state.volume>0);assert.ok(Math.abs(state.mass-11)<1e-9)});
 test('udviklingssession følger prøveudtagning og tilsætning som massebalance',()=>{const db=emptyDB(),fill=base(db,'3 mg base','nicotine',3),a=base(db,'Aroma','aroma');a.pg=100;a.vg=0;a.density=db.settings.pg;const r=recipe();r.name='Original';r.draft.nicotineMode='base';r.draft.fillBaseId=fill.id;r.draft.rows=[{ingredientId:a.id,mode:'volume',amount:10}];const initial=solve(r.draft,db.ingredients,10,db.settings),session=createDevelopmentSession(r,db.ingredients,db.settings,{name:'Forsøg',startVolume:10,tare:20,startGross:20+initial.total});const before=developmentState(session,db.settings);appendDevelopmentEvent(session,{type:'withdrawal',gross:20+before.mass/2},db.settings);appendDevelopmentEvent(session,{type:'addition',ingredientId:a.id,method:'amount',unit:'grams',amount:.1},db.settings);const after=developmentState(session,db.settings);assert.ok(Math.abs(after.mass-(before.mass/2+.1))<1e-9);assert.equal(after.steps.length,2);assert.ok(after.items.find(x=>x.id===a.id).grams>before.items.find(x=>x.id===a.id).grams/2)});
 test('målt tilsætning og rettelse genberegner efterfølgende trin',()=>{const db=emptyDB(),fill=base(db,'Base','base'),a=base(db,'Aroma','aroma'),r=recipe();r.draft.nicotineMode='base';r.draft.fillBaseId=fill.id;const initial=solve(r.draft,db.ingredients,10,db.settings),session=createDevelopmentSession(r,db.ingredients,db.settings,{name:'Forsøg',startVolume:10,tare:5,startGross:5+initial.total});const current=developmentState(session,db.settings),event=appendDevelopmentEvent(session,{type:'addition',ingredientId:a.id,method:'weighed',gross:5+current.mass+.2},db.settings);assert.ok(Math.abs(developmentState(session,db.settings).steps[0].deltaGrams-.2)<1e-9);replaceDevelopmentEvent(session,event.id,{gross:5+current.mass+.3},db.settings);assert.ok(Math.abs(developmentState(session,db.settings).steps[0].deltaGrams-.3)<1e-9)});
-test('udviklingsresultat bliver en låst normaliseret opskrift',()=>{const db=emptyDB(),fill=base(db,'Base','base'),a=base(db,'Aroma','aroma'),r=recipe();r.draft.nicotineMode='base';r.draft.fillBaseId=fill.id;r.draft.rows=[{ingredientId:a.id,mode:'volume',amount:5}];const initial=solve(r.draft,db.ingredients,10,db.settings),session=createDevelopmentSession(r,db.ingredients,db.settings,{name:'Ny opskrift',startVolume:10,tare:0,startGross:initial.total});appendDevelopmentEvent(session,{type:'addition',ingredientId:a.id,method:'amount',unit:'drops',amount:10},db.settings);const state=developmentState(session,db.settings),made=developmentToRecipe(session,db.settings,'Resultat'),mixed=solve(made.draft,db.ingredients,100,db.settings);assert.equal(made.locked,true);assert.equal(made.draft.batch,100);assert.equal(made.draft.rows[0].mode,'weight');assert.equal(made.name,'Resultat');assert.ok(made.draft.rows[0].amount>0);assert.ok(Math.abs(mixed.strength-state.strength)<1e-9);assert.ok(Math.abs(mixed.items.find(x=>x.id===a.id).grams/mixed.total-state.items.find(x=>x.id===a.id).grams/state.mass)<1e-9)});
+test('udviklingsresultat bliver en låst normaliseret opskrift',()=>{const db=emptyDB(),fill=base(db,'Base','base'),a=base(db,'Aroma','aroma'),r=recipe();r.draft.nicotineMode='base';r.draft.fillBaseId=fill.id;r.draft.rows=[{ingredientId:a.id,mode:'volume',amount:5}];const initial=solve(r.draft,db.ingredients,10,db.settings),session=createDevelopmentSession(r,db.ingredients,db.settings,{name:'Ny opskrift',startVolume:10,tare:0,startGross:initial.total});appendDevelopmentEvent(session,{type:'addition',ingredientId:a.id,method:'amount',unit:'drops',amount:10},db.settings);const state=developmentState(session,db.settings),made=developmentToRecipe(session,db.settings,'Resultat',db.ingredients),mixed=solve(made.draft,db.ingredients,100,db.settings);assert.equal(made.locked,true);assert.equal(made.draft.batch,100);assert.equal(made.draft.rows[0].mode,'weight');assert.equal(made.name,'Resultat');assert.ok(made.draft.rows[0].amount>0);assert.ok(Math.abs(mixed.strength-state.strength)<1e-9);assert.ok(Math.abs(mixed.items.find(x=>x.id===a.id).grams/mixed.total-state.items.find(x=>x.id===a.id).grams/state.mass)<1e-9)});
 
 test('målberegner fortynding og ny aroma i volumenprocent uden at ændre sessionen',()=>{const db=emptyDB(),fill=base(db,'3 mg base','nicotine',3),a=base(db,'Lakrids-mentol','aroma'),b=base(db,'Svejdehagl','aroma'),r=recipe();r.draft.nicotineMode='base';r.draft.fillBaseId=fill.id;r.draft.rows=[{ingredientId:a.id,mode:'volume',amount:10}];const session=createDevelopmentSession(r,db.ingredients,db.settings,{startMode:'volume',startVolume:10,tare:4});const plan=planDevelopmentTargets(session,db.settings,{targets:[{ingredientId:a.id,percent:7},{ingredientId:b.id,percent:3}]});assert.ok(Math.abs(plan.finalVolume-10/7*10)<1e-8);assert.ok(Math.abs(plan.additions.find(x=>x.ingredientId===b.id).ml-plan.finalVolume*.03)<1e-8);assert.ok(Math.abs(plan.additions.find(x=>x.ingredientId===fill.id).ml-(plan.finalVolume-10-plan.finalVolume*.03))<1e-8);assert.equal(plan.overCapacity,true);assert.equal(session.events.length,0)});
 test('målberegner bruger vægt% præcist ved forskellige vægtfylder',()=>{const db=emptyDB(),fill=base(db,'VG base','base'),a=base(db,'Ethanol aroma','aroma'),r=recipe();fill.density=1.26;a.density=.79;r.draft.nicotineMode='base';r.draft.fillBaseId=fill.id;r.draft.rows=[{ingredientId:a.id,mode:'volume',amount:10}];const session=createDevelopmentSession(r,db.ingredients,db.settings,{startMode:'volume',startVolume:10,tare:4,capacity:20}),state=developmentState(session,db.settings),currentWeight=state.items.find(item=>item.id===a.id).grams/state.mass*100;const plan=planDevelopmentTargets(session,db.settings,{percentMode:'weight',targets:[{ingredientId:a.id,percent:currentWeight/2}]});const aroma=plan.composition.find(item=>item.ingredientId===a.id);assert.ok(Math.abs(aroma.weightPercent-currentWeight/2)<1e-8);assert.ok(Math.abs(aroma.volumePercent-currentWeight/2)>0.1);assert.equal(plan.percentMode,'weight');assert.ok(plan.additions.some(item=>item.ingredientId===fill.id));const corrected=correctDevelopmentPlan(session,db.settings,plan,[]);assert.equal(corrected.percentMode,'weight');assert.ok(Math.abs(corrected.composition.find(item=>item.ingredientId===a.id).weightPercent-currentWeight/2)<1e-8)});
@@ -30,3 +30,74 @@ test('målberegner kan tilføje en aroma til en prøve med kun base',()=>{const 
 test('målberegner afviser umulige mål og dubletter',()=>{const db=emptyDB(),fill=base(db,'Base','base'),a=base(db,'Aroma A','aroma'),b=base(db,'Aroma B','aroma'),r=recipe();r.draft.nicotineMode='base';r.draft.fillBaseId=fill.id;r.draft.rows=[{ingredientId:a.id,mode:'volume',amount:10},{ingredientId:b.id,mode:'volume',amount:20}];const session=createDevelopmentSession(r,db.ingredients,db.settings,{startMode:'volume',startVolume:10,tare:4});const plan=planDevelopmentTargets(session,db.settings,{targets:[{ingredientId:a.id,percent:7},{ingredientId:b.id,percent:2}]});assert.ok(Math.abs(plan.finalVolume-100)<1e-8);assert.equal(plan.overCapacity,true);assert.throws(()=>planDevelopmentTargets(session,db.settings,{targets:[{ingredientId:a.id,percent:0}]}),/kan ikke fjernes/);assert.throws(()=>planDevelopmentTargets(session,db.settings,{targets:[{ingredientId:fill.id,percent:40},{ingredientId:a.id,percent:30}]}),/kræver/);assert.throws(()=>planDevelopmentTargets(session,db.settings,{targets:[{ingredientId:a.id,percent:7},{ingredientId:a.id,percent:6}]}),/flere mål/)});
 test('korrektion flytter differencen til basen og registrerer først ved bekræftelse',()=>{const db=emptyDB(),fill=base(db,'Base','base'),a=base(db,'Aroma A','aroma'),b=base(db,'Aroma B','aroma'),r=recipe();r.draft.nicotineMode='base';r.draft.fillBaseId=fill.id;r.draft.rows=[{ingredientId:a.id,mode:'volume',amount:10}];const session=createDevelopmentSession(r,db.ingredients,db.settings,{startMode:'volume',startVolume:10,tare:4,capacity:20}),plan=planDevelopmentTargets(session,db.settings,{targets:[{ingredientId:a.id,percent:7},{ingredientId:b.id,percent:3}]});const proposed=plan.additions.find(item=>item.ingredientId===b.id).ml,corrected=correctDevelopmentPlan(session,db.settings,plan,[{ingredientId:b.id,ml:.4}]);assert.equal(session.events.length,0);assert.ok(Math.abs(corrected.additions.find(item=>item.ingredientId===fill.id).ml-(plan.additions.find(item=>item.ingredientId===fill.id).ml+proposed-.4))<1e-8);assert.throws(()=>correctDevelopmentPlan(session,db.settings,plan,[{ingredientId:b.id,ml:plan.finalVolume}]),/fylder mere/);assert.equal(session.events.length,0);registerDevelopmentPlan(session,db.settings,corrected);const state=developmentState(session,db.settings);assert.equal(session.events.length,2);assert.ok(Math.abs(state.items.find(item=>item.id===b.id).ml-.4)<1e-8);assert.ok(Math.abs(state.volume-plan.finalVolume)<1e-8);assert.throws(()=>registerDevelopmentPlan(session,db.settings,corrected),/ændret/)});
 test('overførsel af flere tilsætninger er atomisk ved fejl',()=>{const db=emptyDB(),fill=base(db,'Base','base'),a=base(db,'Aroma','aroma'),r=recipe();r.draft.nicotineMode='base';r.draft.fillBaseId=fill.id;r.draft.rows=[{ingredientId:a.id,mode:'volume',amount:10}];const session=createDevelopmentSession(r,db.ingredients,db.settings,{startMode:'volume',startVolume:10,tare:4,capacity:20}),plan=planDevelopmentTargets(session,db.settings,{targets:[{ingredientId:a.id,percent:7}]});const corrected=correctDevelopmentPlan(session,db.settings,plan,[]),broken=structuredClone(corrected);broken.additions.push({ingredientId:'ukendt',ml:.1});assert.throws(()=>registerDevelopmentPlan(session,db.settings,broken),/Ugyldig registrering/);assert.equal(session.events.length,0);session.bottleCapacity=10;assert.throws(()=>registerDevelopmentPlan(session,db.settings,corrected),/kapacitet/);assert.equal(session.events.length,0)});
+
+test('0 mg mål behøver ingen nikotinbase, mens negativt mål afvises',()=>{
+ const db=emptyDB(),fill=base(db,'Neutral','base'),r=recipe();
+ r.draft.fillBaseId=fill.id;r.draft.target=0;r.draft.nicotineBaseId='';
+ assert.equal(solve(r.draft,db.ingredients).strength,0);
+ assert.doesNotThrow(()=>checkRecipe(r,db.ingredients,db.settings));
+ r.draft.target=-1;
+ assert.throws(()=>solve(r.draft,db.ingredients),/nikotinstyrke/);
+ assert.throws(()=>checkRecipe(r,db.ingredients,db.settings),/nikotinstyrke/);
+ r.draft.target=3;
+ assert.throws(()=>solve(r.draft,db.ingredients),/nikotinbase/);
+});
+
+test('tidligere base-kategori med nikotin bevares i base-tilstand',()=>{
+ const db=emptyDB(),nicBase=base(db,'3 mg blandebase','base',3),r=recipe();
+ r.draft.nicotineMode='base';r.draft.fillBaseId=nicBase.id;
+ assert.equal(solve(r.draft,db.ingredients).strength,3);
+ r.locked=true;db.recipes.push(r);
+ assert.doesNotThrow(()=>validate(db));
+ r.draft.nicotineMode='target';r.draft.target=0;
+ assert.throws(()=>solve(r.draft,db.ingredients),/passende fortyndings- eller nikotinbase/);
+});
+
+test('ingrediens- og opskriftskontrol afviser umulig styrke, kategori og dosering',()=>{
+ const db=emptyDB(),fill=base(db,'Neutral','base'),nic=base(db,'Nikotin','nicotine',52),a=base(db,'Aroma','aroma'),r=recipe();
+ r.draft.fillBaseId=fill.id;r.draft.nicotineBaseId=nic.id;r.draft.rows=[{ingredientId:a.id,mode:'volume',amount:5}];
+ assert.doesNotThrow(()=>checkRecipe(r,db.ingredients,db.settings));
+ a.strength=3;assert.throws(()=>checkIngredient(a),/Aromaer og tilsætninger/);a.strength=0;
+ nic.strength=1001;assert.throws(()=>checkIngredient(nic),/nikotinstyrke/);nic.strength=52;
+ r.draft.rows[0].ingredientId=fill.id;assert.throws(()=>solve(r.draft,db.ingredients),/Kun aromaer/);
+ r.draft.rows[0].ingredientId=a.id;r.draft.rows[0].amount=101;assert.throws(()=>checkRecipe(r,db.ingredients,db.settings),/fylder mere/);
+});
+
+test('v3-import kontrollerer hele databasen uden at ændre den',()=>{
+ const db=emptyDB(),fill=base(db,'Neutral','base'),a=base(db,'Aroma','aroma'),locked=recipe(),draft=recipe();
+ locked.draft.nicotineMode='base';locked.draft.fillBaseId=fill.id;locked.draft.rows=[{ingredientId:a.id,mode:'volume',amount:5}];locked.locked=true;
+ db.recipes.push(locked,draft);
+ const session=createDevelopmentSession(locked,db.ingredients,db.settings,{startVolume:10,tare:2});
+ db.developmentSessions.push(session);
+ const before=structuredClone(db);
+ assert.equal(validate(db),db);assert.deepEqual(db,before);
+ draft.draft.batch=0;assert.doesNotThrow(()=>validate(db));draft.draft.batch=100;
+ const brokenSettings=structuredClone(db);brokenSettings.settings.scaleResolution=0;
+ assert.throws(()=>validate(brokenSettings),/scaleResolution/);
+ const brokenRecipe=structuredClone(db);brokenRecipe.recipes[0].draft.rows[0].ingredientId=fill.id;
+ assert.throws(()=>validate(brokenRecipe),/Kun aromaer/);
+ const brokenReference=structuredClone(db);brokenReference.recipes[0].draft.rows[0].ingredientId='missing';
+ assert.throws(()=>validate(brokenReference),/gyldig ingrediens/);
+ const brokenSession=structuredClone(db);brokenSession.developmentSessions[0].events.push({id:'event',type:'addition',ingredientId:'missing',method:'amount',unit:'ml',amount:1});
+ assert.throws(()=>validate(brokenSession),/ukendt ingrediens/);
+ const brokenMass=structuredClone(db);brokenMass.developmentSessions[0].initial[0].grams++;
+ assert.throws(()=>validate(brokenMass),/stemmer ikke overens/);
+ const brokenVolume=structuredClone(db);brokenVolume.developmentSessions[0].startVolume++;
+ assert.throws(()=>validate(brokenVolume),/startvolumen stemmer ikke overens/);
+ const duplicate=structuredClone(db);duplicate.ingredients.push(structuredClone(fill));
+ assert.throws(()=>validate(duplicate),/Dubleret id/);
+});
+
+test('udviklingsresultat afvises, hvis biblioteksdata ændres eller en ekstra nikotinbase tilsættes',()=>{
+ const db=emptyDB(),fill=base(db,'Neutral','base'),nic=base(db,'52 mg','nicotine',52),extra=base(db,'20 mg','nicotine',20),a=base(db,'Aroma','aroma'),r=recipe();
+ r.draft.fillBaseId=fill.id;r.draft.nicotineBaseId=nic.id;r.draft.target=3;r.draft.rows=[{ingredientId:a.id,mode:'volume',amount:5}];
+ const session=createDevelopmentSession(r,db.ingredients,db.settings,{startVolume:10,tare:2});
+ const converted=developmentToRecipe(session,db.settings,'Resultat',db.ingredients);
+ assert.ok(Math.abs(solve(converted.draft,db.ingredients).strength-developmentState(session,db.settings).strength)<1e-9);
+ a.density+=.01;
+ assert.throws(()=>developmentToRecipe(session,db.settings,'Resultat',db.ingredients),/ændret i ingrediensbiblioteket/);
+ a.density-=.01;
+ appendDevelopmentEvent(session,{type:'addition',ingredientId:extra.id,method:'amount',unit:'ml',amount:.1},db.settings);
+ assert.throws(()=>developmentToRecipe(session,db.settings,'Resultat',db.ingredients),/ekstra base eller nikotinbase/);
+ assert.throws(()=>developmentToRecipe(session,db.settings,'Resultat'),/Ingrediensbiblioteket/);
+});
