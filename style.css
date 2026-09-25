@@ -90,3 +90,18 @@
   .print-sheet .result-panel,.print-sheet .batch-controls{border:0;padding:0}
   .print-sheet .warning{border:1px solid #777;background:#fff;color:#000}
 }
+
+/* Stack the recipe actions so the batch control does not occupy a full row. */
+.blend-row{grid-template-columns:minmax(0,1fr) 150px;row-gap:3px}
+.blend-row .row-title{grid-column:1;grid-row:1;align-self:end}
+.blend-row-actions{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;gap:8px;width:150px}
+.blend-row-actions button{width:100%}
+.blend-meta{grid-column:1;grid-row:2;align-self:start}
+@media(max-width:600px){
+  .blend-row{grid-template-columns:minmax(0,1fr) 112px}
+  .blend-row-actions{width:112px}
+}
+@media(max-width:360px){
+  .blend-row{grid-template-columns:minmax(0,1fr) 96px}
+  .blend-row-actions{width:96px}
+}
